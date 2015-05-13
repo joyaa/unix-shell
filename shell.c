@@ -70,13 +70,16 @@ int exec_line(char **args) {
 	}
 
 
-	pid = fork();
+	//for parentprocess: returns pid of child 
+	//for childprocess: return 0 
+	pid = fork();	
+	
 	if(pid == 0) {
-		if(execvp(args[0], args) == -1)
-			perror("fork error");
-		exit(EXIT_SUCCESS);	
+		if(execvp(args[0], args) == -1)	//execvp only returns in case of error
+			perror("fork error");		//print last error encountered on stderr
+		exit(EXUT_FAILURE);	
 	} else if(pid == -1) {
-		perror("fork error");
+		perror("fork error");	
 	} else {
 		while((pid = waitpid(-1, &status, WUNTRACED)) > 0) {
 			if(WIFEXITED(status) || WIFSIGNALED(status)) 
