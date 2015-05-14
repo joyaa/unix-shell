@@ -14,13 +14,13 @@ char **tokenize_line(char*);
 int exec_line(char**);
 
 int main(int argc, char **argv) {
-	//char *line;
+	char *line;
 	char **args;
 	int pstatus, status;
 	pid_t pid;
-	char line[80];
+	/*char line[80];
 	char* success;
-
+	*/
 	while(1) {
 
 		fprintf(stderr, "%i\n", 1);
@@ -32,10 +32,12 @@ int main(int argc, char **argv) {
 		}
 		fprintf(stderr, "%i\n", 2);
 
-		printf("> ");
+		/*printf("> ");
 		success = fgets(line, sizeof(line), stdin);
 		line[strlen(line) - 1] = '\0';
-
+		*/
+		line = readline("> ");
+		
 		args = tokenize_line(line);
 		
 				if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
