@@ -9,6 +9,8 @@
 #include <sys/types.h>
 
 static int numArgs = 0;	//number of arguments (including command)
+int pgid;
+
 
 char **tokenize_line(char*);
 int exec_line(char**);
@@ -21,6 +23,10 @@ int main(int argc, char **argv) {
 	/*char line[80];
 	char* success;
 	*/
+
+	pgid = getpid();
+	setpgid(pgid, pgid);
+
 	while(1) {
 
 		fprintf(stderr, "%i\n", 1);
@@ -37,23 +43,23 @@ int main(int argc, char **argv) {
 		line[strlen(line) - 1] = '\0';
 		*/
 		line = readline("> ");
-		
+
 		args = tokenize_line(line);
 		
-				if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+/*				if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 			if(WIFEXITED(status) || WIFSIGNALED(status)) {
 				printf("BG [%d] terminated\n", pid);
 			}
-		}
+		}*/
 
 		pstatus = exec_line(args);
 		
 
-				if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+/*				if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 			if(WIFEXITED(status) || WIFSIGNALED(status)) {
 				printf("BG [%d] terminated\n", pid);
 			}
-		}
+		}*/
 
 		fprintf(stderr, "%i\n", 3);
 		//free allocated memory
@@ -112,6 +118,12 @@ int exec_line(char **args) {
 	//in childprocess: fork return 0 
 	pid = fork();	
 	if(pid == 0) {
+		if(background)
+			setpgid(pgid, pgid);
+		else {
+			pid = getpid();
+			setpgid(pid, pid);
+		}	
 		if(execvp(args[0], args) == -1)	//execvp only returns in case of error
 			perror("fork error");		//print last error encountered on stderr
 		exit(EXIT_FAILURE);	
@@ -119,12 +131,16 @@ int exec_line(char **args) {
 		perror("fork error");	
 	} else {
 		if(!background){
+			setpgid(pid, pid);
 			printf("FG [%d] forked. ", pid);
-			waitpid(-1, &status, 0);
+			waitpid(pid, &status, 0);
 			stop = time(0);
 			totalTime = difftime(stop, start);
 			printf("FG [%d] terminated, runtime: %.4fms\n", pid, totalTime);
-		} else { printf("BG [%d] forked.\n", pid);}
+		} else { 
+			setpgid(pgid, pgid);
+			printf("BG [%d] forked.\n", pid);
+		}
 	}	
 	return 1;
 }
