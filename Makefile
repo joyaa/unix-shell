@@ -1,4 +1,4 @@
-FLAGS  += -g -pedantic -ansi -Wall -Werror -Wextra -O3
+FLAGS  += -g -pedantic -ansi -Wall -O4
 LDFLAGS += -lreadline
 
 shell: shell.c
