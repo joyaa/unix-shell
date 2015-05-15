@@ -9,6 +9,8 @@
 #include <sys/types.h>
 
 static int numArgs = 0;	//number of arguments (including command)
+int pgid;
+
 
 char **tokenize_line(char*);
 int exec_line(char**);
@@ -16,27 +18,31 @@ int exec_line(char**);
 int main(int argc, char **argv) {
 	char *line;
 	char **args;
-	int status;
+	int pstatus, status;
 	pid_t pid;
 
+	pgid = getpid();
+	setpgid(pgid, pgid);
+
 	while(1) {
-		printf("PID%i", pid);
-		while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-			printf("Sug balle1");
+
+		if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 			if(WIFEXITED(status) || WIFSIGNALED(status)) {
-				printf("Process %d has been terminated\n", pid);
-			}
-		}
-		line = readline("> "); // readline return is default malloc
-		args = tokenize_line(line);
-		status = exec_line(args);
-		while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-			printf("Sug balle2");
-			if(WIFEXITED(status) || WIFSIGNALED(status)) {
-				printf("Process %d has been terminated\n", pid);
+				printf(" BG [%d] terminated\n", pid);
 			}
 		}
 
+		
+
+		line = readline("> ");
+		if(line[0] == '\0') // if empty input, just continue
+			continue;
+		//line[strlen(line) - 1] = '\0';
+	
+	
+		args = tokenize_line(line);
+		pstatus = exec_line(args);
+		
 
 		//free allocated memory
 		free(line);
@@ -83,9 +89,8 @@ int exec_line(char **args) {
 	if(*args[numArgs-1] == '&') {
 		//background process
 		background = 1;
-		args[numArgs-1] = NULL;	//remove the '&'
-	}
-	else {
+		args[numArgs-1] = '\0';	//remove the '&'
+	} else {
 		//foreground process
 		start = time(0);
 	}
@@ -95,24 +100,28 @@ int exec_line(char **args) {
 	//in childprocess: fork return 0 
 	pid = fork();	
 	if(pid == 0) {
+		if(background)
+			setpgid(pgid, pgid);
+		else {
+			pid = getpid();
+			setpgid(pid, pid);
+		}	
 		if(execvp(args[0], args) == -1)	//execvp only returns in case of error
 			perror("fork error");		//print last error encountered on stderr
 		exit(EXIT_FAILURE);	
 	} else if(pid == -1) {
 		perror("fork error");	
 	} else {
-		printf("pid pid pid pid%i", pid);
 		if(!background){
-			waitpid(-1, &status, 0);
+			setpgid(pid, pid);
+			printf(" FG [%d] forked\n", pid);
+			waitpid(pid, &status, 0);
 			stop = time(0);
 			totalTime = difftime(stop, start);
-			printf("Running time:%.4fms\n", totalTime);
-		}
-		while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-			printf("Sug balle3");
-			if(WIFEXITED(status) || WIFSIGNALED(status)) {
-				printf("Process %d has been terminated\n", pid);
-			}
+			printf(" FG [%d] terminated, runtime: %.4fms\n", pid, totalTime);
+		} else { 
+			setpgid(pgid, pgid);
+			printf(" BG [%d] forked\n", pid);
 		}
 	}	
 	return 1;

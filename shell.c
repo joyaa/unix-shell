@@ -20,50 +20,32 @@ int main(int argc, char **argv) {
 	char **args;
 	int pstatus, status;
 	pid_t pid;
-	/*char line[80];
-	char* success;
-	*/
 
 	pgid = getpid();
 	setpgid(pgid, pgid);
 
 	while(1) {
 
-		fprintf(stderr, "%i\n", 1);
-
 		if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 			if(WIFEXITED(status) || WIFSIGNALED(status)) {
-				printf("BG [%d] terminated\n", pid);
+				printf(" BG [%d] terminated\n", pid);
 			}
 		}
-		fprintf(stderr, "%i\n", 2);
 
-		/*printf("> ");
-		success = fgets(line, sizeof(line), stdin);
-		line[strlen(line) - 1] = '\0';
-		*/
-		line = readline("> ");
-
-		args = tokenize_line(line);
 		
-/*				if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-			if(WIFEXITED(status) || WIFSIGNALED(status)) {
-				printf("BG [%d] terminated\n", pid);
-			}
-		}*/
 
+		line = readline("> ");
+		if(line[0] == '\0') // if empty input, just continue
+			continue;
+		//line[strlen(line) - 1] = '\0';
+	
+	
+		args = tokenize_line(line);
 		pstatus = exec_line(args);
 		
 
-/*				if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-			if(WIFEXITED(status) || WIFSIGNALED(status)) {
-				printf("BG [%d] terminated\n", pid);
-			}
-		}*/
-
-		fprintf(stderr, "%i\n", 3);
 		//free allocated memory
-		//free(line);
+		free(line);
 		free(args);					
 	}
 }
@@ -132,14 +114,14 @@ int exec_line(char **args) {
 	} else {
 		if(!background){
 			setpgid(pid, pid);
-			printf("FG [%d] forked. ", pid);
+			printf(" FG [%d] forked\n", pid);
 			waitpid(pid, &status, 0);
 			stop = time(0);
 			totalTime = difftime(stop, start);
-			printf("FG [%d] terminated, runtime: %.4fms\n", pid, totalTime);
+			printf(" FG [%d] terminated, runtime: %.4fms\n", pid, totalTime);
 		} else { 
 			setpgid(pgid, pgid);
-			printf("BG [%d] forked.\n", pid);
+			printf(" BG [%d] forked\n", pid);
 		}
 	}	
 	return 1;
