@@ -12,7 +12,7 @@
 #include <signal.h>
 
 static int numArgs = 0;	//number of arguments (including command)
-int pgid;
+int pgid;	// Main process group ID
 
 
 char **tokenize_line(char*);
@@ -31,11 +31,11 @@ int main(int argc, char **argv) {
 
 		if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 			if(WIFEXITED(status) || WIFSIGNALED(status)) {
-				printf(" BG [%d] terminated\n", pid);
+				printf("BG [%d] terminated\n", pid);
 			}
 		}
 
-		
+			
 
 		line = readline("> ");
 		if(line[0] == '\0') // if empty input, just continue
@@ -82,6 +82,31 @@ char **tokenize_line(char *line) {
 	return tokens;
 }
 
+/* 
+	Change current directory. No arguments changes to home directory.
+ */
+int cd_cmd(char **args) {
+	const char *path = getenv("HOME"); // default new directory path
+	if(numArgs > 1)	// directory path specified
+		path = args[1];
+	if(chdir(path) < -1)
+		perror("cd failed");	
+	return 1;
+}
+
+/*
+	Kill all processes associated with the terminal. 
+*/
+int exit_cmd(char **args) {
+	if(args[1] == NULL) {	// BÖR IGNORERA ARGUMENT?
+		if(kill(-pgid, SIGTERM) < 0) // not sure if -pgid or 0
+			exit(EXIT_FAILURE);
+	} else { 
+		printf("Error using exit. Usage: \"exit\"\n");	
+		return 1;
+	}	
+}
+
 int exec_line(char **args) {
 	pid_t pid;
 	int status, background = 0;
@@ -99,21 +124,11 @@ int exec_line(char **args) {
 	}
 	
 	if(strcmp(args[0], "cd") == 0) {
-		const char *path = getenv("HOME");
-		if(numArgs > 1)
-			path = args[1];
-		if(chdir(path) < 0)
-			perror("cd failed");	
-		return 1;
+		return cd_cmd(args);	// may change to args[1]
 	} 
+
 	if(strcmp(args[0], "exit") == 0) {
-		if(args[1] == NULL) {
-			if(kill(-pgid, SIGTERM) < 0) // not sure if -pgid or 0
-				exit(EXIT_FAILURE);
-		} else { 
-			printf("Error using exit. Usage: \"exit\"\n");	
-			return 1;
-		}
+		return exit_cmd(args); 	// may change to args[1]
 	}
 
 
@@ -135,14 +150,14 @@ int exec_line(char **args) {
 	} else {
 		if(!background){
 			setpgid(pid, pid);
-			printf(" FG [%d] forked\n", pid);
+			printf("FG [%d] forked\n", pid);
 			waitpid(pid, &status, 0);
 			stop = time(0);
 			totalTime = difftime(stop, start);
-			printf(" FG [%d] terminated, runtime: %.4fms\n", pid, totalTime);
+			printf("FG [%d] terminated, runtime: %.8fms\n", pid, totalTime);
 		} else { 
+			printf("BG [%d] forked\n", pid);
 			setpgid(pgid, pgid);
-			printf(" BG [%d] forked\n", pid);
 		}
 	}	
 	return 1;
