@@ -6,7 +6,3 @@ shell: shell.c
 
 clean:
 	rm shell
-
-.PHONY: clean
-
--include config.mk

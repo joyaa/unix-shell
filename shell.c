@@ -1,4 +1,5 @@
-#define _POSIX_SOURCE
+// Run with make CFLAGS=-DSIGDET=1 to enable signal detection
+#define _XOPEN_SOURCE 500
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -11,6 +12,7 @@
 #include <unistd.h>
 #include <signal.h>
 
+
 static int numArgs = 0;	//number of arguments (including command)
 int pgid;	// Main process group ID
 static int grepON = 0;	// rep enable
@@ -18,42 +20,54 @@ char **grepArgs;
 
 char **tokenize_line(char*);
 int exec_line(char**);
-void checkEnv_normal(void);
+void checkEnv_normal();
 void checkEnv_grep(char **);
 int exec_pipe(int, char const**[]);
 void exec_pipeProc(int, int, char* const[]);
-
-
+void proc_ignoreInterupt();
+#ifdef SIGDET
+void termination_handler(int);
+#endif
 
 int main(int argc, char **argv) {
 	char *line;
 	char **args;
 	int pstatus, status;
 	pid_t pid;
+	int *sig;
 
 	pgid = getpid();
 	setpgid(pgid, pgid);
 
-	while(1) {
+	proc_ignoreInterupt();	
+	
+#ifdef SIGDET
+	struct sigaction action;
+	action.sa_handler = &termination_handler;
+	sigemptyset(&action.sa_mask);
+	action.sa_flags = SA_NOCLDSTOP; // only for terminated children, not stopped
+	if (sigaction(SIGCHLD, &action, NULL) < 0)
+		perror("sigaction");
+#endif
 
+	while(1) {
+#ifndef SIGDET
 		if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 			if(WIFEXITED(status) || WIFSIGNALED(status)) {
 				printf("BG [%d] terminated\n", pid);
 			}
 		}
+#endif
 
 			
 
 		line = readline("> ");
 		if(line[0] == '\0') // if empty input, just continue
 			continue;
-		//line[strlen(line) - 1] = '\0';
-	
 	
 		args = tokenize_line(line);
 		pstatus = exec_line(args);
 		
-
 		//free allocated memory
 		free(line);
 		free(args);					
@@ -106,7 +120,7 @@ int cd_cmd(char **args) {
 */
 int exit_cmd(char **args) {
 	if(args[1] == NULL) {	// BÖR IGNORERA ARGUMENT?
-		if(kill(-pgid, SIGTERM) < 0) // not sure if -pgid or 0
+		if(kill(-pgid, SIGTERM) < 0) // sig is sent to every process in the process group whose ID is -pid.
 			exit(EXIT_FAILURE);
 	} else { 
 		printf("Error using exit. Usage: \"exit\"\n");	
@@ -120,6 +134,7 @@ int exec_line(char **args) {
 	int status, background = 0;
 	time_t start, stop;	
 	double totalTime;
+	int *sig;
 
 	//check if foreground or background process
 	if(*args[numArgs-1] == '&') {
@@ -151,11 +166,16 @@ int exec_line(char **args) {
 	//in childprocess: fork return 0 
 	pid = fork();	
 	if(pid == 0) {
-		if(background)
-			setpgid(pgid, pgid);
-		else {
-			pid = getpid();
-			setpgid(pid, pid);
+		if(background) {
+			if (setpgid(0, pgid) < 0)
+				perror("setpgid");
+		} else {
+			pid = getpid(); //
+			if (setpgid(pid, pid) < 0)
+				perror("setpgid");
+			if (tcsetpgrp(STDIN_FILENO, pid) < 0)
+				perror("tcsetpgrp");
+			proc_ignoreInterupt();	
 		}	
 		if(execvp(args[0], args) == -1)	//execvp only returns in case of error
 			perror("fork error");		//print last error encountered on stderr
@@ -164,15 +184,26 @@ int exec_line(char **args) {
 		perror("fork error");	
 	} else {
 		if(!background){
-			setpgid(pid, pid);
+			if (setpgid(pid, pid) < 0)
+			perror("setpgid");
+			// set current fg process pgid to "working" process group
+			if (tcsetpgrp(STDIN_FILENO, pid) < 0)
+			perror("tcsetpgrp");
+
 			printf("FG [%d] forked\n", pid);
 			waitpid(pid, &status, 0);
+			// set fg process group to pgid, i.e the originial process group
+			if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
+			perror("tcsetpgrp");
+
 			stop = time(0);
 			totalTime = difftime(stop, start);
 			printf("FG [%d] terminated, runtime: %.8fms\n", pid, totalTime);
 		} else { 
 			printf("BG [%d] forked\n", pid);
-			setpgid(pgid, pgid);
+			// set pgid of process #pid to originial fg pg, to be able to terminate upon exit
+			if (setpgid(pid, pgid) < 0)
+				perror("setpgid");
 		}
 	}	
 	return 1;
@@ -199,7 +230,7 @@ void checkEnv_normal(void) {
 				pager[0] = "more";
 				pager[1] = NULL;
 				const char** command[] = {printenv, sort, pager};
-				exec_pipe(3, command); // but use less, more or pager 
+				exec_pipe(3, command); // will execute more if pager and less failed 
 			} else {
 				exit(EXIT_FAILURE);
 			}
@@ -259,7 +290,9 @@ void exec_pipeProc(int in, int out, char* const args[]) {
 			dup2(out, 1);
 			close(out);
 		}
-		execvp(args[0], args);
+		if(execvp(args[0], args) == -1)	//execvp only returns in case of error
+			perror("fork error");		//print last error encountered on stderr
+		exit(EXIT_FAILURE);	
 	}
 }
 
@@ -270,3 +303,28 @@ void checkEnv_grep(char** args) {
 
 	checkEnv_normal();
 }
+
+void proc_ignoreInterupt() {
+	if(signal(SIGTTOU, SIG_IGN) == SIG_ERR)
+				perror("sigttou");
+	if(signal(SIGINT, SIG_IGN) == SIG_ERR)
+				perror("sigint");
+	if(signal(SIGQUIT, SIG_IGN) == SIG_ERR)
+				perror("sigquit");
+	if(signal(SIGTSTP, SIG_IGN) == SIG_ERR)
+				perror("sigtstp");
+	if(signal(SIGTTIN, SIG_IGN) == SIG_ERR)
+				perror("sigttin");
+}
+
+#ifdef SIGDET 
+void termination_handler(int signum) {
+    int status;
+    pid_t pid;
+	if((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+		if(WIFEXITED(status) || WIFSIGNALED(status)) {
+			printf("BG [%d] terminated\n> ", pid);
+		}
+	}
+}
+#endif
