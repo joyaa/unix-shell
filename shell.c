@@ -1,6 +1,4 @@
 /*
-	UTSKRIFTER FÖR checkEnv?
-
 	Run with make CFLAGS=-DSIGDET=1 to enable signal detection
  */
 
@@ -277,10 +275,10 @@ int exec_line(char **args) {
 		/* parentprocess */
 		if(!background){
 			/* foreground process */
-			if (setpgid(pid, pid) < 0) /* set PGID of parentprocess to pid of parentprocess */
+			if (setpgid(pid, pid) < 0) /* set PGID of childprocess to pid of childproces */
 				perror("setpgid");
 
-			/* set current fg process pgid to "working" process group */
+			/* set current fg process i.e the childprocess pgid to "working" process group */
 			if (tcsetpgrp(STDIN_FILENO, pid) < 0)
 				perror("tcsetpgrp");
 
@@ -325,9 +323,9 @@ void checkEnv_normal(void) {
 	const char *sort[] = {"sort", NULL};
 	const char *pager[] = {"less", NULL}; /* default pager less */
 	const char** command[3];
-	command[1] = printenv;
-	command[2] = sort;
-	command[3] = pager;
+	command[0] = printenv;
+	command[1] = sort;
+	command[2] = pager;
 
 	if(!(pagerType == NULL)) { /* set pager to environment pager type if it isnt null */
 		pager[0] = pagerType;
@@ -344,9 +342,9 @@ void checkEnv_normal(void) {
 			if(exec_pipe(3, command) == -1) {
 				pager[0] = "more"; 	/* set pager to more if env pager and less failed */
 				pager[1] = NULL;
-				command[1] = printenv;
-				command[2] = sort;
-				command[3] = pager;
+				command[0] = printenv;
+				command[1] = sort;
+				command[2] = pager;
 				if(exec_pipe(3, command))
 					perror("checkEnv");
 			} else {
