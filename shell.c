@@ -415,13 +415,14 @@ int exec_pipe(int n, char const** command[]) {
 		}
 
 		/* close write end of pipe, may now reuse the closed fd */
-		close(fd[1]);
+		if(close(fd[1]) < 0)
+			perror("close fd");
 		/* the read end will be used by the next child to read from */
 		in = fd[0];
 	}	
 	if(in != 0)
-		dup2(in, 0); /* redirect */
-	
+		if(dup2(in, 0) < 0) /* redirect */
+			perror("dup");
 	
 	return run_last((char* const*)command[i]);
 }
@@ -435,12 +436,16 @@ void exec_pipeProc(int in, int out, char* const args[]) {
 
 	if((pid = fork()) == 0) {
 		if(in != 0) {
-			dup2(in, 0); /* make fd specified by 0 copy of in fd */
-			close(in);
+			if(dup2(in, 0) < 0) /* make fd specified by 0 copy of in fd */
+				perror("dup");
+			if(close(in) < 0)
+				perror("close fd");
         }
 		if(out != 1) {
-			dup2(out, 1); /* make fd specified by 1 copy of in out */
-			close(out);
+			if(dup2(out, 1) < 0) /* make fd specified by 1 copy of in out */
+				perror("dup");
+			if(close(out) < 0)
+				perror("close fd");
 		}
 		if(execvp(args[0], args) == -1)	
 			perror("fork error");		
