@@ -1,9 +1,5 @@
 /*
-	HUR MOTVERKAS CTRL+C????
-	VARFÖR run_last???
-	SKA INTE checkEnv KUNNA KÖRAS SOM I BG?
 	UTSKRIFTER FÖR checkEnv?
-	LYCKAS INTE KÖRA SIG DETECTION?
 
 	Run with make CFLAGS=-DSIGDET=1 to enable signal detection
  */
@@ -20,11 +16,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/timeb.h> 
 
 
 static int numArgs = 0;	//number of arguments (including command)
 int pgid;	// Main process group ID
-static int grepON = 0;	// rep enable
+static int grepON = 0;	// grep enable
 char **grepArgs;
 
 char **tokenize_line(char*);
@@ -45,7 +42,7 @@ int main(int argc, char **argv) {
 	int pstatus, status; //parent and process status 
 	pid_t pid;
 	int *sig;
-
+	
 	pgid = getpid();		// get pid of the main process
 	setpgid(pgid, pgid);	// 
 
@@ -218,9 +215,9 @@ int exit_cmd(char **args) {
 int exec_line(char **args) {
 	pid_t pid;
 	int status, background = 0;
-	time_t start, stop;	
-	double totalTime;
 	int *sig;
+	struct timeb  tv, tv1;
+	int diff;
 
 	//check if foreground or background process
 	if(*args[numArgs-1] == '&') {
@@ -229,7 +226,7 @@ int exec_line(char **args) {
 		args[numArgs-1] = NULL;	//remove the '&'
 	} else {
 		//foreground process, start counting time
-		start = time(0);
+		ftime(&tv);
 	}
 	
 	//check if any of the built in commands
@@ -294,9 +291,11 @@ int exec_line(char **args) {
 			if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
 				perror("tcsetpgrp");
 
-			stop = time(0);
-			totalTime = difftime(stop, start);
-			printf("FG [%d] terminated, runtime: %.8fms\n", pid, totalTime);
+			ftime(&tv1);
+			
+			diff = (int) (1000.0 * (tv1.time - tv.time)	+ (tv1.millitm - tv.millitm));	
+
+			printf("FG [%d] terminated, runtime: %dms\n", pid, diff);
 		} else { 
 			//bg process
 			printf("BG [%d] forked\n", pid);
@@ -314,9 +313,9 @@ int exec_line(char **args) {
 	checkEnv executes - printenv | sort | pager
  */
 void checkEnv_normal(void) {
-	time_t start, stop;	
-	double totalTime;
-
+	struct timeb  tv, tv1;
+	int diff;
+	
 	char *pagerType = getenv("PAGER"); //get type of pager
 
 	//as arrays for execvp
@@ -330,9 +329,10 @@ void checkEnv_normal(void) {
 	}
 	const char** command[] = {printenv, sort, pager};
 	pid_t pid;
-    int status;
+    	int status;
 
-	start = time(0);
+		
+	ftime(&tv);
 
 	//execute checkEnv command in a new process
 	if((pid = fork()) > -1) {
@@ -349,10 +349,15 @@ void checkEnv_normal(void) {
 			}
 		} else {	
 			//parentprocess
+			
+			printf("FG [%d] forked\n", pid);
 			waitpid(pid, &status, 0);
-			stop = time(0);
-			totalTime = difftime(stop, start);
-			printf("Runtime:%.4fs\n", totalTime);
+			ftime(&tv1);
+			
+			diff = (int) (1000.0 * (tv1.time - tv.time)	+ (tv1.millitm - tv.millitm));	
+
+			printf("FG [%d] terminated, runtime: %dms\n", pid, diff);
+	
 		}
 	} else {
 		perror("fork");
