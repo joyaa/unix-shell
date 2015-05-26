@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
 	pgid = getpid();		/* get pid of the main process */
 	setpgid(pgid, pgid); 
 
-	proc_ignoreInterrupt();	/* ignore some signals */
+	
 	
 	/* Initialize signal detection handler for background processes */
 #ifdef SIGDET
@@ -61,11 +61,11 @@ int main(int argc, char **argv) {
 	printf("BG process termination detection: %s. \n", detection);
 	/* Main command-line prompter and executioner */
 	while(1) {
-
+	proc_ignoreInterrupt();	/* ignore some signals */
 #ifndef SIGDET
 
 		/* when using polling as background process termination detection */
-		if((pid = waitpid(-1, &status, WNOHANG)) > 0) { 
+		while((pid = waitpid(-1, &status, WNOHANG)) > 0) { 
 			/* &status indicates change for process specified by pid */
 			if(WIFEXITED(status) || WIFSIGNALED(status)) {
 				/* the status indicates normal child termination or termination by non handled signal */
@@ -76,18 +76,21 @@ int main(int argc, char **argv) {
 
 		printf("> ");
 		line = getline();
-		if(line[0] == '\0') /* if empty input, continue */
-			continue;
+		
+		/* FUNKAR EJ if empty input, continue */
+		if(line[0] == '\0') 
+			goto cont;
 		
 		/* tokenize input line */
 		args = tokenize_line(line);
 
 		/* execute the command with arguments */
-		pstatus = exec_line(args);
-		
+		if((pstatus = exec_line(args)) == 0) 
+			perror("exec_line");
+
 		/* free allocated memory */
-		free(line);
-		free(args);					
+		free(args);		
+cont:	free(line);
 	}
 }
 
@@ -264,7 +267,8 @@ int exec_line(char **args) {
 			  process group on terminal associated w STDIN_FILENO */ 
 			if (tcsetpgrp(STDIN_FILENO, pid) < 0) 
 				perror("tcsetpgrp");
-			proc_ignoreInterrupt();	
+			/*proc_ignoreInterrupt();*/
+			signal(SIGINT, SIG_DFL);
 		}	
 		if(execvp(args[0], args) == -1)	/* execvp only returns in case of error */
 			perror("fork error");
