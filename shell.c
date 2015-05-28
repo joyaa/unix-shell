@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 		printf("> ");
 		line = getline();
 		
-		/* FUNKAR EJ if empty input, continue */
+		/* if empty input, continue */
 		if(line[0] == '\0') 
 			goto cont;
 		/* tokenize input line */
