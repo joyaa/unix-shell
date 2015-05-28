@@ -80,7 +80,6 @@ int main(int argc, char **argv) {
 		/* FUNKAR EJ if empty input, continue */
 		if(line[0] == '\0') 
 			goto cont;
-		
 		/* tokenize input line */
 		args = tokenize_line(line);
 
@@ -114,6 +113,9 @@ char* getline(void) {
 	while (1) {
 
 		c = getchar(); /* get char from stdin */
+		if((c == ' ' || c == '\t') && buf[0] == '\0') {
+			continue;
+		}
 
 		if (c == '\n' || c == EOF) {
 			/* end of line (or file), add null byte to end of line and return it */
@@ -318,7 +320,7 @@ void checkEnv_normal(void) {
 	struct timeb  tv, tv1;
 	int diff;
 	pid_t pid;
-    int status;
+    	int status;
 
 	char *pagerType = getenv("PAGER"); /* get type of pager */
 
